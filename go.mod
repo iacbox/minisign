@@ -1,4 +1,4 @@
-module asteas.com/minisign
+module github.com/iacbox/minisign
 
 go 1.23
 

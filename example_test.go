@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"asteas.com/minisign"
+	"github.com/iacbox/minisign"
 )
 
 func ExampleGenerateKey() {
