@@ -6,6 +6,10 @@
 
 minisign is a dead simple tool to sign files and verify signatures.
 
+NOTE: This forked version adds just one feature - it allows to set the scrypt CPU and RAM limits
+for private key encrpytion, as the default "sensitive" needs 1GB of RAM which is too much for some
+use cases.
+
 ```
 $ minisign -G                                                                                  
 Please enter a password to protect the secret key.

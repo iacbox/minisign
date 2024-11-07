@@ -60,6 +60,34 @@ func ExampleEncryptKey() {
 	// Output: true
 }
 
+func ExampleEncryptKeyWithScryptParams() {
+	// Generate a new minisign private / public key pair.
+	// We don't care about the public key in this example.
+	_, privateKey, err := minisign.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
+
+	const password = "correct horse battery staple"
+	const scryptLimitCategory = minisign.ScryptLimitPresetInteractive
+
+	// Encrypt the private key with the password
+	encryptedKey, err := minisign.EncryptKeyWithScryptParams(password, privateKey, scryptLimitCategory)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
+
+	// Then, decrypt the encrypted key with the password again
+	decryptedKey, err := minisign.DecryptKey(password, encryptedKey)
+	if err != nil {
+		panic(err) // TODO: error handling
+	}
+
+	// Now, both private keys should be identical
+	fmt.Println(privateKey.Equal(decryptedKey))
+	// Output: true
+}
+
 func ExampleDecryptKey() {
 	const (
 		rawPrivateKey = "RWRTY0IyorAWr/1gdweGki6ua7GpmoPqS+7rMBSmBy6hedA53dAAABAAAAAAAAAAAAIAAAAAwfmyB6qIIW2eGNiQaFzgs1oi52iN8cRHBPRupc9TVdfAeJvlPdvzu3TfA2DHTW2PZi98uihcr5sEB5fefFml2d0xBk72ZOGNJpOTsn95eHgEH/qUfzQZ018JfiVwWf8pNpdgNFX8ROs="

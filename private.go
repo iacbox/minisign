@@ -174,12 +174,34 @@ const (
 	scryptOpsLimit = 0x2000000  // max. Scrypt ops limit based on libsodium
 	scryptMemLimit = 0x40000000 // max. Scrypt mem limit based on libsodium
 
+	ScryptLimitPresetMin         = "min"
+	ScryptLimitPresetInteractive = "interactive"
+	ScryptOLimitPresetSensitive  = "sensitive"
+
 	privateKeySize = 158 // 2 + 2 + 2 + 32 + 8 + 8 + 104
+)
+
+var (
+	// ScryptLimitCategories defines the Scrypt cost limits for three categories: min, interactive, sensitive.
+	// Defined in libsodium: src/libsodium/include/sodium/crypto_pwhash_scryptsalsa208sha256.h
+	ScryptLimitPresets = map[string]map[string]uint64{
+		ScryptLimitPresetMin:         {"ops": 32768, "mem": 16777216},      // 16MB memory
+		ScryptLimitPresetInteractive: {"ops": 524288, "mem": 16777216},     // 16MB memory
+		ScryptOLimitPresetSensitive:  {"ops": 33554432, "mem": 1073741824}, // 1GB memory
+		// leave out the "max" category as the mem-limit of 68719476736ULL is insane - 68GB
+	}
 )
 
 // EncryptKey encrypts the private key with the given password
 // using some entropy from the RNG of the OS.
 func EncryptKey(password string, privateKey PrivateKey) ([]byte, error) {
+	return EncryptKeyWithScryptParams(password, privateKey, "")
+}
+
+// EncryptKey encrypts the private key with the given password
+// using some entropy from the RNG of the OS.
+// The Scrypt costs for CPU and memory are defined by the scrypt category:
+func EncryptKeyWithScryptParams(password string, privateKey PrivateKey, scryptLimitCat string) ([]byte, error) {
 	var privateKeyBytes [72]byte
 	binary.LittleEndian.PutUint64(privateKeyBytes[:], privateKey.ID())
 	copy(privateKeyBytes[8:], privateKey.bytes[:])
@@ -194,14 +216,19 @@ func EncryptKey(password string, privateKey PrivateKey) ([]byte, error) {
 	binary.LittleEndian.PutUint16(bytes[2:], algorithmScrypt)
 	binary.LittleEndian.PutUint16(bytes[4:], algorithmBlake2b)
 
-	const ( // TODO(aead): Callers may want to customize the cost parameters
-		defaultOps = 33554432   // libsodium OPS_LIMIT_SENSITIVE
-		defaultMem = 1073741824 // libsodium MEM_LIMIT_SENSITIVE
-	)
+	var scryptOpsLimit, scryptMemLimit uint64
+	if scryptLimits, ok := ScryptLimitPresets[scryptLimitCat]; ok {
+		scryptOpsLimit = scryptLimits["ops"]
+		scryptMemLimit = scryptLimits["mem"]
+	} else {
+		// default to sensitive limits which is the minisign default
+		scryptOpsLimit = ScryptLimitPresets[ScryptOLimitPresetSensitive]["ops"]
+		scryptMemLimit = ScryptLimitPresets[ScryptOLimitPresetSensitive]["mem"]
+	}
 	copy(bytes[6:38], salt[:])
-	binary.LittleEndian.PutUint64(bytes[38:], defaultOps)
-	binary.LittleEndian.PutUint64(bytes[46:], defaultMem)
-	copy(bytes[54:], encryptKey(password, salt[:], defaultOps, defaultMem, privateKeyBytes[:]))
+	binary.LittleEndian.PutUint64(bytes[38:], scryptOpsLimit)
+	binary.LittleEndian.PutUint64(bytes[46:], scryptMemLimit)
+	copy(bytes[54:], encryptKey(password, salt[:], scryptOpsLimit, scryptMemLimit, privateKeyBytes[:]))
 
 	const comment = "untrusted comment: minisign encrypted secret key\n"
 	encodedBytes := make([]byte, len(comment)+base64.StdEncoding.EncodedLen(len(bytes)))

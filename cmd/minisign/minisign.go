@@ -21,10 +21,10 @@ import (
 	"golang.org/x/term"
 )
 
-const version = "v0.3.0"
+const version = "v0.3.1"
 
 const usage = `Usage:
-    minisign -G [-p <pubKey>] [-s <secKey>] [-W]
+    minisign -G [-p <pubKey>] [-s <secKey>] [-W] [-l <scrypt-costs>]
     minisign -R [-s <secKey>] [-p <pubKey>]
     minisign -C [-s <secKey>] [-W]
     minisign -S [-x <signature>] [-s <secKey>] [-c <comment>] [-t <comment>] -m <file>...
@@ -49,6 +49,7 @@ Options:
     -q               Quiet mode. Suppress output.
     -Q               Pretty quiet mode. Combined with -V, only print the trusted comment.
     -f               Combined with -G or -R, overwrite any existing public/secret key pair.
+    -l               Combined with -G or -C to set the scrypt preset holding CPU and mem limits [min, interactive, sensitive] (default: sensitive)
     -v               Print version information.
 `
 
@@ -68,13 +69,14 @@ var (
 	flagTrustedComment   string // Custom comment that is signed and verified
 	flagUntrustedComment string // Custom comment that is NOT signed NOR verified
 
-	flagOutput          bool // Output files when verified successfully
-	flagPreHash         bool // Verify legacy signatures when files where pre-hashed
-	flagWithoutPassword bool // Whether a private key should be password-protected
-	flagPrettyQuiet     bool // Suppress output except for trusted comment after verification
-	flagQuiet           bool // Suppress all output
-	flagForce           bool // Overwrite existing private/public keys
-	flagVersion         bool // Print version information
+	flagOutput            bool   // Output files when verified successfully
+	flagPreHash           bool   // Verify legacy signatures when files where pre-hashed
+	flagWithoutPassword   bool   // Whether a private key should be password-protected
+	flagPrettyQuiet       bool   // Suppress output except for trusted comment after verification
+	flagQuiet             bool   // Suppress all output
+	flagForce             bool   // Overwrite existing private/public keys
+	flagScryptLimitPreset string // Scrypt preset for CPU and memory limits when encrypting a private key [min, interactive, sensitive]
+	flagVersion           bool   // Print version information
 )
 
 func main() {
@@ -101,6 +103,7 @@ func main() {
 	flag.BoolVar(&flagPrettyQuiet, "Q", false, "")
 	flag.BoolVar(&flagQuiet, "q", false, "")
 	flag.BoolVar(&flagForce, "f", false, "")
+	flag.StringVar(&flagScryptLimitPreset, "l", "", "")
 	flag.BoolVar(&flagVersion, "v", false, "")
 
 	os.Args = append(os.Args[:1:1], expandFlags(os.Args[1:])...) // Expand flags to parse combined flags '-Vm' or '-Gf' properly
@@ -129,6 +132,13 @@ func main() {
 }
 
 func generateKeyPair() {
+	if !flagWithoutPassword && flagScryptLimitPreset != "" {
+		// we have a custom scrypt limit category
+		if _, ok := minisign.ScryptLimitPresets[flagScryptLimitPreset]; !ok {
+			exitf("Error: given scrypt limit (-l) category unknown: %s", flagScryptLimitPreset)
+		}
+	}
+
 	// Create private and public key parent directories
 	mkdirs(filepath.Dir(flagPrivateKeyFile))
 	mkdirs(filepath.Dir(flagPublicKeyFile))
@@ -179,7 +189,7 @@ func generateKeyPair() {
 		}
 
 		fmt.Print("Deriving a key from the password in order to encrypt the secret key... ")
-		privKey, err = minisign.EncryptKey(password, privateKey)
+		privKey, err = minisign.EncryptKeyWithScryptParams(password, privateKey, flagScryptLimitPreset)
 		if err != nil {
 			fmt.Println()
 			exitf("Error: %v", err)
@@ -395,6 +405,12 @@ func changePassword() {
 	if err != nil {
 		exitf("Error: %v", err)
 	}
+	if !flagWithoutPassword && flagScryptLimitPreset != "" {
+		// we have a custom scrypt limit category
+		if _, ok := minisign.ScryptLimitPresets[flagScryptLimitPreset]; !ok {
+			exitf("Error: given scrypt limit (-l) category unknown: %s", flagScryptLimitPreset)
+		}
+	}
 
 	// minisign always prints this message - even if the private key is not encrypted
 	if flagWithoutPassword {
@@ -435,7 +451,7 @@ func changePassword() {
 		}
 
 		fmt.Print("Deriving a key from the password in order to encrypt the secret key... ")
-		if keyBytes, err = minisign.EncryptKey(password, privateKey); err != nil {
+		if keyBytes, err = minisign.EncryptKeyWithScryptParams(password, privateKey, flagScryptLimitPreset); err != nil {
 			fmt.Println()
 			exitf("Error: %v", err)
 		}
