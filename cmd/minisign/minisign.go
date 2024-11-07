@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"aead.dev/minisign"
+	"asteas.com/minisign"
 	"golang.org/x/term"
 )
 

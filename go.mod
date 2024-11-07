@@ -1,6 +1,6 @@
-module aead.dev/minisign
+module asteas.com/minisign
 
-go 1.21
+go 1.23
 
 require (
 	golang.org/x/crypto v0.13.0
